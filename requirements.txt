@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+psycopg2-binary
+asyncpg
+SQLAlchemy
+pgvector
+langchain
+huggingface-hub
+sentence-transformers
