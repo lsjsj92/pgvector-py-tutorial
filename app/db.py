@@ -1,30 +1,40 @@
-from sqlalchemy import create_engine, text
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy import text
+
 from app.config import DB_USER, DB_PASS, DB_HOST, DB_PORT, DB_NAME
 
-# PostgreSQL + Psycopg2
-DATABASE_URL = f"postgresql+psycopg2://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
+# PostgreSQL URL (asyncpg)
+DATABASE_URL = f"postgresql+asyncpg://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_NAME}"
 
-engine = create_engine(DATABASE_URL, echo=True)
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+# echo=True -> SQL 로그 출력
+async_engine = create_async_engine(DATABASE_URL, echo=True)
+
+# 세션 팩토리 (자동커밋/오토플러시 끔)
+AsyncSessionLocal = sessionmaker(
+    bind=async_engine,
+    expire_on_commit=False,
+    class_=AsyncSession,
+    autoflush=False,
+    autocommit=False
+)
 
 Base = declarative_base()
 
-def init_db():
+async def init_db():
     """
-    pgvector 확장을 활성화하고, Base에 정의된 모든 테이블을 생성합니다.
+    pgvector 확장을 활성화하고, Base에 정의된 모든 테이블을 생성
     """
-    with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        conn.commit()
-    Base.metadata.create_all(bind=engine)
+    async with async_engine.begin() as conn:
+        # pgvector extension
+        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        # 테이블 생성
+        await conn.run_sync(Base.metadata.create_all)
 
-def get_db_session():
+# FastAPI 의존성 주입용
+async def get_db_session():
     """
-    매 요청마다 사용할 세션을 제공하기 위한 의존성 함수
+    DB 세션을 제공하는 Generator
     """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    async with AsyncSessionLocal() as session:
+        yield session
